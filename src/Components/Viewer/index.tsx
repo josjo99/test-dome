@@ -1,16 +1,19 @@
 import React, { useEffect, useRef } from "react";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
-import {  Vector3 } from "@babylonjs/core/Maths/math";
+import {  Color3, Vector3 } from "@babylonjs/core/Maths/math";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { ArcRotateCamera, CubeTexture, EquiRectangularCubeTexture, MeshBuilder, StandardMaterial, Texture } from "@babylonjs/core/Legacy/legacy";
+import { ActionManager, ArcRotateCamera, DeepImmutableObject, ExecuteCodeAction, FreeCamera, HighlightLayer, Mesh, MeshBuilder, SceneLoader, StandardMaterial, Texture } from "@babylonjs/core/Legacy/legacy";
 import "@babylonjs/loaders/glTF";
 
 const Viewer =() => {
     const reactCanvas = useRef<any>(null);
     const engine = useRef<Engine|null>(null);
     const scene = useRef<Scene|null>(null);
-    const camera = useRef<ArcRotateCamera|null>(null);
+    const camera = useRef<FreeCamera|null>(null);
+    const targetPosition = useRef<Vector3>();
+    const highlighLayer = useRef<HighlightLayer|null>(null);
+    const skyBox = useRef<Mesh|null>(null);
 
     useEffect(()=>{
         if (reactCanvas?.current) {
@@ -21,34 +24,128 @@ const Viewer =() => {
 
     const addCamera = () => {
         if(scene.current){
-            camera.current = new ArcRotateCamera(
+            camera.current = new FreeCamera(
                 'Camera',
-                2.0944,
-                1,
-                5,
-                new Vector3(0, 0, 0),
+                new Vector3(0, 2, 0),
                 scene.current
             );
             camera.current.attachControl(reactCanvas.current, true);
-            camera.current.wheelDeltaPercentage = 0.01; //Camera to rotate around model as if on a rotating podium
+            // camera.current. = 0.01; //Camera to rotate around model as if on a rotating podium
         }   
     };
 
     const addFloorMesh = () => {
-
+        SceneLoader.ImportMesh(
+            "", 
+            "", 
+            "https://raw.githubusercontent.com/josjo99/ship-resources/main/meshes/Floor.glb", 
+            scene.current, 
+            (meshes) => {
+                const mesh = meshes[0];
+                mesh.position = Vector3.Zero();
+                initializeHotspots();
+            }
+        );
     }
 
+    const addSkyBox = () => {
+        if(scene.current){
+            skyBox.current = MeshBuilder.CreateSphere("skyBox", { diameter: 200 }, scene.current);
+        }
+        changeSkyBoxTexture();
+    }
+
+    const changeSkyBoxTexture = (meshName?: string) => {
+        if(scene.current && skyBox.current){
+            let hdrTexture: Texture = new Texture("https://raw.githubusercontent.com/josjo99/ship-resources/main/textures/Circle.jpg", scene.current);
+            if(meshName !== undefined){
+                hdrTexture = new Texture(`https://raw.githubusercontent.com/josjo99/ship-resources/main/textures/${meshName}.jpg`, scene.current);
+                skyBox.current.material?.dispose();
+            }
+            const skyboxMaterial = new StandardMaterial("skyBoxMaterial", scene.current);
+            skyboxMaterial.backFaceCulling = false;
+            skyboxMaterial.reflectionTexture = hdrTexture
+            skyboxMaterial.reflectionTexture.coordinatesMode = Texture.FIXED_EQUIRECTANGULAR_MIRRORED_MODE;
+            skyBox.current.material = skyboxMaterial;
+        }
+    }
+
+    const initializeHotspots = () => {
+        if(scene.current){
+            const hotspots = scene.current.getTransformNodeByName("Hotspots");
+            const hotspotMeshes = hotspots?.getChildMeshes();
+            if(hotspotMeshes !== undefined){
+                for(let mesh of hotspotMeshes){
+                    if(mesh.actionManager === null){
+                        mesh.actionManager = new ActionManager();
+                    }
+                    mesh.actionManager.registerAction(
+                        new ExecuteCodeAction(ActionManager.OnLeftPickTrigger, () => {
+                            const endPosition = mesh.getAbsolutePosition();
+                            targetPosition.current = endPosition.add(new Vector3(0,2,0));
+                            changeSkyBoxTexture(mesh.name);
+                        })
+                    );
+                    mesh.actionManager.registerAction( 
+                        new ExecuteCodeAction(ActionManager.OnPointerOverTrigger, () => {
+                            if(highlighLayer.current){
+                                highlighLayer.current.addMesh(mesh as Mesh, Color3.White());
+                            }
+                        })
+                    );
+                    mesh.actionManager.registerAction( 
+                        new ExecuteCodeAction(ActionManager.OnPointerOutTrigger, () => {
+                            if(highlighLayer.current){
+                                highlighLayer.current.removeMesh(mesh as Mesh);
+                            }
+                        })
+                    )
+                }
+            }
+        }
+    }
+
+    const cameraControl = () => {
+        if(camera.current){
+            if(targetPosition.current){
+                camera.current.position = Vector3.Lerp(camera.current.position, targetPosition.current as DeepImmutableObject<Vector3> , 0.04);
+            }
+        }
+    }
+
+    const addHighlightLayer = () => {
+        if(scene.current){
+            highlighLayer.current = new HighlightLayer("highlightLayer", scene.current);
+        }
+    }
+
+    const addLight = () => {
+        if(scene.current){
+            const hemisphericLight = new HemisphericLight(
+                'HemisphericLight',
+                new Vector3(0, 1, 0),
+                scene.current
+            );
+            hemisphericLight.intensity = 0.4;
+        }
+    };
+ 
     const initializeEnvironment = () => {
         engine.current = new Engine(reactCanvas.current,true);
         scene.current = new Scene(engine.current);
-        // scene.current.debugLayer.show({
-        //     overlay:true,
-        //     showExplorer: true,
-        //     showInspector: true
-        // });
+        scene.current.debugLayer.show({
+            overlay:true,
+            showExplorer: true,
+            showInspector: true
+        });
         addCamera();
-        addFloorMesh()
         addLight();
+        addFloorMesh()
+        addSkyBox();
+        addHighlightLayer();
+        scene.current.registerBeforeRender(function () {
+            cameraControl();
+        });
         engine.current.runRenderLoop(() => {
             if(scene.current){
                 if (camera.current) {
@@ -57,27 +154,6 @@ const Viewer =() => {
             }
         });
     }
-
-    const addLight = () => {
-        if(scene.current){
-        let hemisphericLight = new HemisphericLight(
-            'HemisphericLight',
-            new Vector3(0, 1, 0),
-            scene.current
-            );
-            hemisphericLight.intensity = 0.9;
-
-            if(scene.current){
-                let hdrTexture = new Texture("https://raw.githubusercontent.com/josjo99/test-file-storage/main/texture.jpg", scene.current);
-
-                var skybox = MeshBuilder.CreateSphere("skyBox", { diameter: 100 }, scene.current);
-                var skyboxMaterial = new StandardMaterial("skyBox", scene.current);
-                skyboxMaterial.backFaceCulling = false;
-                skyboxMaterial.diffuseTexture = hdrTexture
-                skybox.material = skyboxMaterial;
-            }
-        }
-    };
         
     return (
         <canvas width={window.innerWidth} height={window.innerHeight}ref={reactCanvas} />

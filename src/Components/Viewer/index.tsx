@@ -133,11 +133,11 @@ const Viewer =() => {
     const initializeEnvironment = () => {
         engine.current = new Engine(reactCanvas.current,true);
         scene.current = new Scene(engine.current);
-        scene.current.debugLayer.show({
-            overlay:true,
-            showExplorer: true,
-            showInspector: true
-        });
+//         scene.current.debugLayer.show({
+//             overlay:true,
+//             showExplorer: true,
+//             showInspector: true
+//         });
         addCamera();
         addLight();
         addFloorMesh()

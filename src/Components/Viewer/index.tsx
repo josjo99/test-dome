@@ -62,8 +62,6 @@ const Viewer =() => {
                 hdrTexture = new Texture(`https://raw.githubusercontent.com/josjo99/ship-resources/main/textures/${meshName}.jpg`, scene.current);
                 skyBox.current.material?.dispose();
             }
-            hdrTexture.wrapU = Texture.CLAMP_ADDRESSMODE;
-            hdrTexture.wrapV = Texture.CLAMP_ADDRESSMODE;
             const skyboxMaterial = new StandardMaterial("skyBoxMaterial", scene.current);
             skyboxMaterial.backFaceCulling = false;
             skyboxMaterial.reflectionTexture = hdrTexture

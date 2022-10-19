@@ -3,7 +3,7 @@ import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
 import {  Color3, Vector3 } from "@babylonjs/core/Maths/math";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { ActionManager, ArcRotateCamera, DeepImmutableObject, ExecuteCodeAction, FreeCamera, HighlightLayer, Mesh, MeshBuilder, SceneLoader, StandardMaterial, Texture } from "@babylonjs/core/Legacy/legacy";
+import { ActionManager, DeepImmutableObject, ExecuteCodeAction, FreeCamera, HighlightLayer, Mesh, MeshBuilder, SceneLoader, StandardMaterial, Texture } from "@babylonjs/core/Legacy/legacy";
 import "@babylonjs/loaders/glTF";
 
 const Viewer =() => {
@@ -26,9 +26,10 @@ const Viewer =() => {
         if(scene.current){
             camera.current = new FreeCamera(
                 'Camera',
-                new Vector3(0, 2, 0),
+                new Vector3(0, 10, 0),
                 scene.current
             );
+            camera.current.inputs.remove(camera.current.inputs.attached.keyboard);
             camera.current.attachControl(reactCanvas.current, true);
             // camera.current. = 0.01; //Camera to rotate around model as if on a rotating podium
         }   
@@ -42,7 +43,10 @@ const Viewer =() => {
             scene.current, 
             (meshes) => {
                 const mesh = meshes[0];
-                mesh.position = Vector3.Zero();
+                const ground = mesh.getChildMeshes(true, (node) => node.name.toLowerCase().includes("ground"));
+                ground[0].setEnabled(false);
+                mesh.position = new Vector3(0,-40, 0);
+                mesh.scaling = new Vector3(50,1,50);
                 initializeHotspots();
             }
         );
@@ -50,7 +54,7 @@ const Viewer =() => {
 
     const addSkyBox = () => {
         if(scene.current){
-            skyBox.current = MeshBuilder.CreateSphere("skyBox", { diameter: 200 }, scene.current);
+            skyBox.current = MeshBuilder.CreateSphere("skyBox", { diameter: 500 }, scene.current);
         }
         changeSkyBoxTexture();
     }
@@ -82,7 +86,7 @@ const Viewer =() => {
                     mesh.actionManager.registerAction(
                         new ExecuteCodeAction(ActionManager.OnLeftPickTrigger, () => {
                             const endPosition = mesh.getAbsolutePosition();
-                            targetPosition.current = endPosition.add(new Vector3(0,2,0));
+                            targetPosition.current = endPosition.add(new Vector3(0,50,0));
                             changeSkyBoxTexture(mesh.name);
                         })
                     );
@@ -110,6 +114,9 @@ const Viewer =() => {
             if(targetPosition.current){
                 camera.current.position = Vector3.Lerp(camera.current.position, targetPosition.current as DeepImmutableObject<Vector3> , 0.04);
             }
+            if(camera.current.position === targetPosition.current){
+                targetPosition.current = undefined;
+            }
         }
     }
 
@@ -133,11 +140,11 @@ const Viewer =() => {
     const initializeEnvironment = () => {
         engine.current = new Engine(reactCanvas.current,true);
         scene.current = new Scene(engine.current);
-//         scene.current.debugLayer.show({
-//             overlay:true,
-//             showExplorer: true,
-//             showInspector: true
-//         });
+        // scene.current.debugLayer.show({
+        //     overlay:true,
+        //     showExplorer: true,
+        //     showInspector: true
+        // });
         addCamera();
         addLight();
         addFloorMesh()
